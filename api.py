@@ -1,5 +1,5 @@
 #!flask/bin/python
-from flask import Flask, jsonify, make_response, request
+from flask import Flask, jsonify, make_response, request, abort
 import boto3
 
 app = Flask(__name__)
@@ -32,43 +32,46 @@ def get_health():
 @app.route('/elb/<elb_name>', methods=['GET'])
 def get_elb(elb_name):
     assert elb_name == request.view_args['elb_name']
-    elbs =  elb_client.describe_load_balancers(
-    LoadBalancerNames=[
-      elb_name
-    ]
-  )['LoadBalancerDescriptions']
+    try:
+        elbs =  elb_client.describe_load_balancers(
+        LoadBalancerNames=[
+        elb_name
+        ]
+    )['LoadBalancerDescriptions']
+    except elb_client.exceptions.AccessPointNotFoundException as e:
+        abort(404)
+    else:
+        elb_instances_ids = sum(list(map(lambda elb: list(map(lambda i: i['InstanceId'], elb['Instances'])), elbs)), [])
 
-    elb_instances_ids = sum(list(map(lambda elb: list(map(lambda i: i['InstanceId'], elb['Instances'])), elbs)), [])
+        reservations = ec2_client.describe_instances(
+            InstanceIds=elb_instances_ids
+        )['Reservations']
 
-    reservations = ec2_client.describe_instances(
-        InstanceIds=elb_instances_ids
-    )['Reservations']
+        all_instances = []
 
-    all_instances = []
-
-    for reservation in reservations:
-        for instance in reservation['Instances']:
-            all_instances.append(
-                {
-                    'instanceId': instance['InstanceId'],
-                    'instanceType': instance['InstanceType'],
-                    'launchDate': instance['LaunchTime'].strftime('%Y-%m-%dT%H:%M:%S.%f')
-                }
-            )
+        for reservation in reservations:
+            for instance in reservation['Instances']:
+                all_instances.append(
+                    {
+                        'instanceId': instance['InstanceId'],
+                        'instanceType': instance['InstanceType'],
+                        'launchDate': instance['LaunchTime'].strftime('%Y-%m-%dT%H:%M:%S.%f')
+                    }
+                )
 
 
-    return jsonify({'Machines' : all_instances})
-
-
-
-#@app.route('/elb/<str:elb_name>', methods=['DELETE'])
-#def remove_instances(instance_name):
+        return jsonify({'Machines' : all_instances})
 
 
 
-#@app.route('/elb/<str:elb_name>', methods=['POST'])
-#def attach_instance(instance_name):
+@app.route('/elb/<elb_name>', methods=['DELETE'])
+def remove_instances(elb_name):
+    assert elb_name == request.view_args['elb_name']
+    
 
+
+#@app.route('/elb/<elb_name>', methods=['POST'])
+#def attach_instance(elb_name):
 
 if __name__ == '__main__':
     app.run(debug=True)
