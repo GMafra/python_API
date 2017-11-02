@@ -101,7 +101,9 @@ def elb_methods(elb_name):
             elb_name
             ]
         )['LoadBalancerDescriptions']
+
             elb_instances_ids = sum(list(map(lambda elb: list(map(lambda i: i['InstanceId'], elb['Instances'])), elbs)), [])
+
             if request.json['instanceId'] not in elb_instances_ids: 
                 abort(instance_notattached(409))
             else:
