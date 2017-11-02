@@ -66,28 +66,34 @@ def get_elb(elb_name):
             return jsonify({'Machines' : all_instances})
 
     if request.method == 'POST':
-        #try:
-        #    elbs =  elb_client.describe_load_balancers(
-        #    LoadBalancerNames=[
-        #    elb_name
-        #    ]
-        #)['LoadBalancerDescriptions']
-        #except Client as e:
-        #    if e.respose['Error']['Code'] == ' 
-        #        abort(409)
-        response = elb_client.register_instances_with_load_balancer(
-            Instances=[
-                {
-                    'InstanceId': 'i-03d6df82e15ddb142',
-                },
-            ],
-            LoadBalancerName= elb_name,
-        )
+        elbs =  elb_client.describe_load_balancers(
+       LoadBalancerNames=[
+        elb_name
+        ]
+    )['LoadBalancerDescriptions']
 
-        return jsonify({'InstanceId' : 'i-03d6df82e15ddb142'})
+        elb_instances_ids = sum(list(map(lambda elb: list(map(lambda i: i['InstanceId'], elb['Instances'])), elbs)), [])
+
+        if 'i-03d6df82e15ddb142' in elb_instances_ids: 
+                abort(409)
+        else:
+
+            response = elb_client.register_instances_with_load_balancer(
+                Instances=[
+                    {
+                        'InstanceId': 'i-03d6df82e15ddb142',
+                    },
+                ],
+                LoadBalancerName= elb_name,
+            )           
+        return jsonify({'instance added' : 'i-03d6df82e15ddb142'})
+
+
+
+
 
     if request.method == 'DELETE':
-        esponse = elb_client.deregister_instances_from_load_balancer(
+        response = elb_client.deregister_instances_from_load_balancer(
             Instances=[
                 {
                     'InstanceId': 'i-03d6df82e15ddb142',
