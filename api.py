@@ -16,13 +16,11 @@ def not_found(error):
 def wrong_data(error):
     return make_response(jsonify({'error': 'Wrong data format'}), 400)
 
-@app.errorhandler(409)
 def instance_attached(error):
     return make_response(jsonify({'error': 'Instance is already on LoadBalancer'}), 409)
 
-@app.errorhandler(408)
 def instance_notattached(error):
-    return make_response(jsonify({'error': 'Instance is not on LoadBalacer'}), 408)
+    return make_response(jsonify({'error': 'Instance is not on LoadBalacer'}), 409)
 
 @app.route('/healthcheck', methods=['GET'])
 def get_health():
@@ -43,7 +41,11 @@ def elb_methods(elb_name):
             if e.response['Error']['Code'] == 'LoadBalancerNotFound':
                 abort(404)
         else:
-            elb_instances_ids = sum(list(map(lambda elb: list(map(lambda i: i['InstanceId'], elb['Instances'])), elbs)), [])
+            elb_instances_ids = []
+            for elb in elbs:
+                instances = elb['Instances']
+                for instance in instances:
+                    elb_instances_ids.append(instance['InstanceId'])
 
             reservations = ec2_client.describe_instances(
                 InstanceIds=elb_instances_ids
@@ -67,13 +69,13 @@ def elb_methods(elb_name):
     if request.method == 'POST':
         try:
             elbs =  elb_client.describe_load_balancers(
-        LoadBalancerNames=[
+            LoadBalancerNames=[
             elb_name
             ]
         )['LoadBalancerDescriptions']
             elb_instances_ids = sum(list(map(lambda elb: list(map(lambda i: i['InstanceId'], elb['Instances'])), elbs)), [])
             if request.json['instanceId'] in elb_instances_ids: 
-                abort(409)
+                abort(instance_attached(409))
             else:
                 response = elb_client.register_instances_with_load_balancer(
                     Instances=[
@@ -93,16 +95,28 @@ def elb_methods(elb_name):
 
 
     if request.method == 'DELETE':
-        response = elb_client.deregister_instances_from_load_balancer(
-            Instances=[
-                {
-                    'InstanceId': 'i-03d6df82e15ddb142',
-                },
-            ],
-            LoadBalancerName= elb_name,
-        )
-
-        return jsonify({'InstanceId' : 'i-03d6df82e15ddb142'})
+        try:
+            elbs =  elb_client.describe_load_balancers(
+        LoadBalancerNames=[
+            elb_name
+            ]
+        )['LoadBalancerDescriptions']
+            elb_instances_ids = sum(list(map(lambda elb: list(map(lambda i: i['InstanceId'], elb['Instances'])), elbs)), [])
+            if request.json['instanceId'] not in elb_instances_ids: 
+                abort(instance_notattached(409))
+            else:
+                response = elb_client.deregister_instances_from_load_balancer(
+                    Instances=[
+                        {
+                            'InstanceId': request.json['instanceId'],
+                        },
+                    ],
+                    LoadBalancerName= elb_name,
+                )           
+            return jsonify({'instance removed' : request.json['instanceId']})
+        except ClientError as e:
+            if e.response ['Error']['Code'] in 'InvalidInstanceID':
+                abort(400)
 
 
 
