@@ -29,9 +29,8 @@ def get_health():
     return jsonify({'Status': 'The service is up!'})
 
 
-
 @app.route('/elb/<elb_name>', methods=['GET', 'POST', 'DELETE'])
-def get_elb(elb_name):
+def elb_methods(elb_name):
     assert elb_name == request.view_args['elb_name']
     if request.method == 'GET':
         try:
@@ -66,27 +65,28 @@ def get_elb(elb_name):
             return jsonify({'Machines' : all_instances})
 
     if request.method == 'POST':
-        elbs =  elb_client.describe_load_balancers(
-       LoadBalancerNames=[
-        elb_name
-        ]
-    )['LoadBalancerDescriptions']
-
-        elb_instances_ids = sum(list(map(lambda elb: list(map(lambda i: i['InstanceId'], elb['Instances'])), elbs)), [])
-
-        if 'i-03d6df82e15ddb142' in elb_instances_ids: 
+        try:
+            elbs =  elb_client.describe_load_balancers(
+        LoadBalancerNames=[
+            elb_name
+            ]
+        )['LoadBalancerDescriptions']
+            elb_instances_ids = sum(list(map(lambda elb: list(map(lambda i: i['InstanceId'], elb['Instances'])), elbs)), [])
+            if request.json['instanceId'] in elb_instances_ids: 
                 abort(409)
-        else:
-
-            response = elb_client.register_instances_with_load_balancer(
-                Instances=[
-                    {
-                        'InstanceId': 'i-03d6df82e15ddb142',
-                    },
-                ],
-                LoadBalancerName= elb_name,
-            )           
-        return jsonify({'instance added' : 'i-03d6df82e15ddb142'})
+            else:
+                response = elb_client.register_instances_with_load_balancer(
+                    Instances=[
+                        {
+                            'InstanceId': request.json['instanceId'],
+                        },
+                    ],
+                    LoadBalancerName= elb_name,
+                )           
+            return jsonify({'instance added' : request.json['instanceId']})
+        except ClientError as e:
+            if e.response ['Error']['Code'] in 'InvalidInstanceID':
+                abort(400)
 
 
 
