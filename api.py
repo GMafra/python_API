@@ -27,6 +27,21 @@ def get_health():
     return jsonify({'Status': 'The service is up!'})
 
 
+def get_instace_data(instaceid):
+    instance_data = []
+    reservations = ec2_client.describe_instances(Filters=[{'Name' : 'instance-id', 'Values' : [instanceid]}])
+    for reservation in reservations['Reservations']:
+        for instance in reservation['Instances']:
+            instance_data.append(
+                {
+                    'instanceId': instance['InstanceId'],
+                    'instanceType': instance['InstanceType'],
+                    'launchDate': instance['LaunchTime'].strftime('%Y-%m-%dT%H:%M:%S.%f')
+                }
+            )
+
+
+
 @app.route('/elb/<elb_name>', methods=['GET', 'POST', 'DELETE'])
 def elb_methods(elb_name):
     assert elb_name == request.view_args['elb_name']
@@ -114,7 +129,7 @@ def elb_methods(elb_name):
                         },
                     ],
                     LoadBalancerName= elb_name,
-                )           
+                )          
             return jsonify({'instance removed' : request.json['instanceId']})
         except ClientError as e:
             if e.response ['Error']['Code'] in 'InvalidInstanceID':
