@@ -1,14 +1,22 @@
-#!flask/bin/python
+#!/usr/bin/python
 # Importing the basic libraries
 from flask import Flask, jsonify, make_response, request, abort
+from flask_basicauth import BasicAuth
 import boto3
 from botocore.exceptions import ClientError
 
 # Creating an app for flask
 app = Flask(__name__)
 
+app.config['BASIC_AUTH_USERNAME'] = 'user'
+app.config['BASIC_AUTH_PASSWORD'] = 'test'
+
+# Conguring session settings
+session = boto3.setup_default_session(region_name='sa-east-1',aws_access_key_id='AKIAIZG5JIDHMYUXJLQQ',aws_secret_access_key='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')
 elb_client = boto3.client('elb')
 ec2_client = boto3.client('ec2')
+
+basic_auth = BasicAuth(app)
 
 # Begin custom error messages functions
 # Return ELB does not exist error 
@@ -34,6 +42,7 @@ def instance_notattached(error):
 
 # API health check function
 @app.route('/healthcheck', methods=['GET'])
+@basic_auth.required
 def get_health():
     return jsonify({'Status': 'The service is up!'})
 
@@ -82,75 +91,89 @@ def getelbInstanceIDs(elb_name):
     elbs = elb_client.describe_load_balancers(LoadBalancerNames=[elb_name])['LoadBalancerDescriptions']
     return sum(list(map(lambda elb: list(map(lambda i: i['InstanceId'], elb['Instances'])), elbs)), [])
 
+# Function for the GET http method
+def getHTTPmethod(elb_name):
+    try:
+        elbs = elb_client.describe_load_balancers(
+        LoadBalancerNames=[
+            elb_name
+        ]
+    )['LoadBalancerDescriptions']
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'LoadBalancerNotFound':
+            abort(404)
+    else:
+        elb_instances_ids = getAllInstanceIDs(elbs)
+        reservations = ec2_client.describe_instances(
+            InstanceIds=elb_instances_ids
+        )['Reservations']
+
+        all_instances = getAllInstances(reservations)
+
+        return jsonify({'Machines' : all_instances})
+
+# Function for the POST http method
+def postHTTPmethod(elb_name, instanceid):
+    try:
+        elb_instances_ids = getelbInstanceIDs(elb_name)
+        if request.json['instanceId'] in elb_instances_ids:
+            abort(instance_attached(409))
+        else:
+            response = elb_client.register_instances_with_load_balancer(
+                Instances=[
+                    {
+                        'InstanceId': instanceid,
+                    },
+                ],
+                LoadBalancerName= elb_name,
+            )
+        return jsonify({'instance added' : get_instace_data(instanceid)})
+    except ClientError as e:
+        if e.response ['Error']['Code'] in 'InvalidInstanceID':
+            abort(400)
+
+#Function for the DELETE http method
+def deleteHTTPmethod(elb_name,instanceid):
+    try:
+        elb_instances_ids = getelbInstanceIDs(elb_name)
+        if request.json['instanceId'] not in elb_instances_ids:
+            abort(instance_notattached(409))
+        else:
+            response = elb_client.deregister_instances_from_load_balancer(
+                Instances=[
+                    {
+                        'InstanceId': instanceid,
+                    },
+                ],
+                LoadBalancerName= elb_name,
+            )
+        return jsonify({'instance removed' : get_instace_data(instanceid)})
+    except ClientError as e:
+        if e.response ['Error']['Code'] in 'InvalidInstanceID':
+            abort(400)
+
 
 # This method is executed whenever /elb/{elb_name} is executed.
 @app.route('/elb/<elb_name>', methods=['GET', 'POST', 'DELETE'])
+@basic_auth.required
 def elb_methods(elb_name):
-
-    # Raises an error if load balancer does not exist
     assert elb_name == request.view_args['elb_name']
-
+    # Calls get method
     if request.method == 'GET':
-        try:
-            elbs = elb_client.describe_load_balancers(
-            LoadBalancerNames=[
-                elb_name
-            ]
-        )['LoadBalancerDescriptions']
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'LoadBalancerNotFound':
-                abort(404)
-        else:
-            elb_instances_ids = getAllInstanceIDs(elbs)
-            reservations = ec2_client.describe_instances(
-                InstanceIds=elb_instances_ids
-            )['Reservations']
+        return getHTTPmethod(elb_name)
+    else:
+        instanceid = request.json['instanceId']
 
-            all_instances = getAllInstances(reservations)
-
-            return jsonify({'Machines' : all_instances})
-
+    # Calls post method
     if request.method == 'POST':
-        try:
-            elb_instances_ids = getelbInstanceIDs(elb_name)
-            if request.json['instanceId'] in elb_instances_ids:
-                abort(instance_attached(409))
-            else:
-                response = elb_client.register_instances_with_load_balancer(
-                    Instances=[
-                        {
-                            'InstanceId': request.json['instanceId'],
-                        },
-                    ],
-                    LoadBalancerName= elb_name,
-                )
-            return jsonify({'instance added' : get_instace_data(request.json['instanceId'])})
-        except ClientError as e:
-            if e.response ['Error']['Code'] in 'InvalidInstanceID':
-                abort(400)
-
+        return postHTTPmethod(elb_name, instanceid)
+        
+    # Delete method
     if request.method == 'DELETE':
-        try:
-            elb_instances_ids = getelbInstanceIDs(elb_name)
-
-            if request.json['instanceId'] not in elb_instances_ids:
-                abort(instance_notattached(409))
-            else:
-                response = elb_client.deregister_instances_from_load_balancer(
-                    Instances=[
-                        {
-                            'InstanceId': request.json['instanceId'],
-                        },
-                    ],
-                    LoadBalancerName= elb_name,
-                )
-            return jsonify({'instance removed' : get_instace_data(request.json['instanceId'])})
-        except ClientError as e:
-            if e.response ['Error']['Code'] in 'InvalidInstanceID':
-                abort(400)
+        return deleteHTTPmethod(elb_name, instanceid)
 
 
 
 # Main body that is executed when this function is called
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=80)
