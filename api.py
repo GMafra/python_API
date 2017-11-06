@@ -12,7 +12,7 @@ app.config['BASIC_AUTH_USERNAME'] = 'user'
 app.config['BASIC_AUTH_PASSWORD'] = 'test'
 
 # Conguring session settings
-session = boto3.setup_default_session(region_name='sa-east-1',aws_access_key_id='AKIAIZG5JIDHMYUXJLQQ',aws_secret_access_key='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')
+session = boto3.setup_default_session(region_name='sa-east-1',aws_access_key_id='access_key',aws_secret_access_key='secret_key')
 elb_client = boto3.client('elb')
 ec2_client = boto3.client('ec2')
 
