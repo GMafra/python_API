@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Importing the basic libraries
+#importing the basic libraries
 from flask import Flask, jsonify, make_response, request, abort
 from flask_basicauth import BasicAuth
 import boto3
@@ -11,7 +11,7 @@ app = Flask(__name__)
 app.config['BASIC_AUTH_USERNAME'] = 'user'
 app.config['BASIC_AUTH_PASSWORD'] = 'test'
 
-# Conguring session settings
+# Configuring session settings
 session = boto3.setup_default_session(region_name='sa-east-1',aws_access_key_id='access_key',aws_secret_access_key='secret_key')
 elb_client = boto3.client('elb')
 ec2_client = boto3.client('ec2')
@@ -21,35 +21,35 @@ basic_auth = BasicAuth(app)
 # Begin custom error messages functions
 # Return ELB does not exist error 
 @app.errorhandler(404)
-def not_found(error):
+def notFound(error):
     return make_response(jsonify({'error': 'The ELB does not exist'}), 404)
 
 # Return error on malformed json request on attaching and dettaching instances
 @app.errorhandler(400)
-def wrong_data(error):
+def wrongData(error):
     return make_response(jsonify({'error': 'Wrong data format'}), 400)
 
 # Return instance already attached to loadbalancer error
-def instance_attached(error):
+def instanceAttached(error):
     return make_response(jsonify({'error': 'Instance is already on LoadBalancer'}), 409)
 
 # Return instance not attached to loadbalancer error
-def instance_notattached(error):
-    return make_response(jsonify({'error': 'Instance is not on LoadBalancer'}), 409)
+def instanceNotAttached(error):
+    return make_response(jsonify({'error': 'Instance is not on LoadBalacer'}), 409)
 
 # End custom error messages functions
-
 
 # API health check function
 @app.route('/healthcheck', methods=['GET'])
 @basic_auth.required
+#this function would be executed whenever the /healthcheck page would be access on the browser
 def get_health():
     return jsonify({'Status': 'The service is up!'})
 
 # Get MachineInfo from EC2 instances
-def get_instace_data(instaceid):
+def getInstanceData(instanceid):
     instance_data = []
-    reservations = ec2_client.describe_instances(Filters=[{'Name' : 'instance-id', 'Values' : [instaceid]}])
+    reservations = ec2_client.describe_instances(Filters=[{'Name' : 'instance-id', 'Values' : [instanceid]}])
     for reservation in reservations['Reservations']:
         for instance in reservation['Instances']:
             instance_data.append(
@@ -91,8 +91,8 @@ def getelbInstanceIDs(elb_name):
     elbs = elb_client.describe_load_balancers(LoadBalancerNames=[elb_name])['LoadBalancerDescriptions']
     return sum(list(map(lambda elb: list(map(lambda i: i['InstanceId'], elb['Instances'])), elbs)), [])
 
-# Function for the GET http method
-def getHTTPmethod(elb_name):
+# Get HTTP method
+def httpGETmethod(elb_name):
     try:
         elbs = elb_client.describe_load_balancers(
         LoadBalancerNames=[
@@ -112,68 +112,59 @@ def getHTTPmethod(elb_name):
 
         return jsonify({'Machines' : all_instances})
 
-# Function for the POST http method
-def postHTTPmethod(elb_name, instanceid):
+# Post HTTP method
+def httpPOSTmethod(elb_name, instanceid):
     try:
         elb_instances_ids = getelbInstanceIDs(elb_name)
-        if request.json['instanceId'] in elb_instances_ids:
-            abort(instance_attached(409))
+
+        if instanceid in elb_instances_ids:
+            abort(instanceAttached(409))
         else:
             response = elb_client.register_instances_with_load_balancer(
-                Instances=[
-                    {
-                        'InstanceId': instanceid,
-                    },
-                ],
+                Instances=[{'InstanceId': instanceid,},],
                 LoadBalancerName= elb_name,
             )
-        return jsonify({'instance added' : get_instace_data(instanceid)})
+        return jsonify({'instance added' : getInstanceData(instanceid)})
     except ClientError as e:
         if e.response ['Error']['Code'] in 'InvalidInstanceID':
             abort(400)
 
-#Function for the DELETE http method
-def deleteHTTPmethod(elb_name,instanceid):
+def httpDELETEmethod(elb_name, instanceid):
     try:
         elb_instances_ids = getelbInstanceIDs(elb_name)
-        if request.json['instanceId'] not in elb_instances_ids:
-            abort(instance_notattached(409))
+
+        if instanceid not in elb_instances_ids:
+            abort(instanceNotAttached(409))
+
         else:
             response = elb_client.deregister_instances_from_load_balancer(
-                Instances=[
-                    {
-                        'InstanceId': instanceid,
-                    },
-                ],
+                Instances=[{'InstanceId': instanceid,},],
                 LoadBalancerName= elb_name,
             )
-        return jsonify({'instance removed' : get_instace_data(instanceid)})
+        return jsonify({'instance removed' : getInstanceData(instanceid)})
     except ClientError as e:
         if e.response ['Error']['Code'] in 'InvalidInstanceID':
             abort(400)
-
-
+    
 # This method is executed whenever /elb/{elb_name} is executed.
 @app.route('/elb/<elb_name>', methods=['GET', 'POST', 'DELETE'])
 @basic_auth.required
 def elb_methods(elb_name):
     assert elb_name == request.view_args['elb_name']
-    # Calls get method
+
     if request.method == 'GET':
-        return getHTTPmethod(elb_name)
+        return httpGETmethod(elb_name)
     else:
         instanceid = request.json['instanceId']
 
-    # Calls post method
     if request.method == 'POST':
-        return postHTTPmethod(elb_name, instanceid)
+        return httpPOSTmethod(elb_name, instanceid)
         
-    # Delete method
     if request.method == 'DELETE':
-        return deleteHTTPmethod(elb_name, instanceid)
+        return httpDELETEmethod(elb_name, instanceid)
 
 
 
 # Main body that is executed when this function is called
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=80)
+    app.run(host='0.0.0.0', port=80, debug=True)
