@@ -12,6 +12,7 @@ app.config['BASIC_AUTH_USERNAME'] = 'user'
 app.config['BASIC_AUTH_PASSWORD'] = 'test'
 
 # Configuring session settings
+session = boto3.setup_default_session(region_name='sa-east-1')
 elb_client = boto3.client('elb')
 ec2_client = boto3.client('ec2')
 
