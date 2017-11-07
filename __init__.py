@@ -35,7 +35,7 @@ def instanceAttached(error):
 
 # Return instance not attached to loadbalancer error
 def instanceNotAttached(error):
-    return make_response(jsonify({'error': 'Instance is not on LoadBalacer'}), 409)
+    return make_response(jsonify({'error': 'Instance is not on LoadBalancer'}), 409)
 
 # End custom error messages functions
 
