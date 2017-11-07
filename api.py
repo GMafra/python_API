@@ -12,7 +12,7 @@ app.config['BASIC_AUTH_USERNAME'] = 'user'
 app.config['BASIC_AUTH_PASSWORD'] = 'test'
 
 # Configuring session settings
-session = boto3.setup_default_session(region_name='sa-east-1',aws_access_key_id='access_key',aws_secret_access_key='secret_key')
+#session = boto3.setup_default_session(region_name='sa-east-1',aws_access_key_id='AKIAIRRC7BIOA7DGV23Q',aws_secret_access_key='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')
 elb_client = boto3.client('elb')
 ec2_client = boto3.client('ec2')
 
@@ -167,4 +167,4 @@ def elb_methods(elb_name):
 
 # Main body that is executed when this function is called
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=80, debug=True)
+    app.run(debug=True)
