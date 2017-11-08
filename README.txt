@@ -10,4 +10,6 @@ GET http://hostname/elb/{elbName} - List all EC2 Instances currently attached to
 POST http://hostname/elb/{elbName} - Attach an EC2 Instance to the elb specified
 DELETE http://hostname/elb/{elbName} - Dettach an EC2 Instance from the elb specified
 
+The API is being served with Apache Web Server
+
 
