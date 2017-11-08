@@ -19,9 +19,18 @@ ec2_client = boto3.client('ec2')
 basic_auth = BasicAuth(app)
 
 # Begin custom error messages functions
-# Return ELB does not exist error 
+# Return wrong page or no access error
 @app.errorhandler(404)
-def notFound(error):
+def wrongEnd(error):
+    return make_response(jsonify({'error': 'Wrong page or access denied'}), 404)
+
+# Return 500 in case instanceId parameter is not written in camelCase
+@app.errorhandler(500)
+def wrongEnd(error):
+    return make_response(jsonify({'error': 'Wrong data format - please use camelCase for instanceId'}), 500)
+
+# Return ELB does not exist error 
+def wrongEnd(error):
     return make_response(jsonify({'error': 'The ELB does not exist'}), 404)
 
 # Return error on malformed json request on attaching and dettaching instances
@@ -101,7 +110,7 @@ def httpGETmethod(elb_name):
     )['LoadBalancerDescriptions']
     except ClientError as e:
         if e.response['Error']['Code'] == 'LoadBalancerNotFound':
-            abort(404)
+            abort(wrongEnd(404))
     else:
         elb_instances_ids = getAllInstanceIDs(elbs)
         reservations = ec2_client.describe_instances(
